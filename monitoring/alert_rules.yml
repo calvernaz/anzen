@@ -1,0 +1,125 @@
+# Prometheus alert rules for Anzen platform
+groups:
+  - name: anzen.rules
+    rules:
+      # High-level service availability
+      - alert: AnzenServiceDown
+        expr: up{job=~"anzen-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Anzen service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second for {{ $labels.job }}"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.job }}"
+
+      # PII detection alerts
+      - alert: HighPIIBlockRate
+        expr: rate(anzen_pii_decisions_total{decision="BLOCK"}[10m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PII block rate detected"
+          description: "PII block rate is {{ $value }} blocks per second, indicating potential data leakage attempts"
+
+      # Unusual PII patterns
+      - alert: UnusualPIIPattern
+        expr: increase(anzen_pii_entities_total{type="CREDIT_CARD"}[1h]) > 10
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Unusual credit card detection pattern"
+          description: "{{ $value }} credit card numbers detected in the last hour"
+
+      # Database connection issues
+      - alert: DatabaseConnectionHigh
+        expr: pg_stat_activity_count > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connection count"
+          description: "Database has {{ $value }} active connections"
+
+      # Memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90%"
+
+      # Disk space
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% on {{ $labels.mountpoint }}"
+
+      # API rate limiting
+      - alert: APIRateLimitHit
+        expr: rate(nginx_http_requests_total{status="429"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API rate limit frequently hit"
+          description: "Rate limiting is being triggered {{ $value }} times per second"
+
+  - name: anzen.business.rules
+    rules:
+      # Business metrics
+      - alert: LowAPIUsage
+        expr: rate(anzen_api_requests_total[1h]) < 0.01
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "Low API usage detected"
+          description: "API usage is unusually low: {{ $value }} requests per second"
+
+      # Compliance alerts
+      - alert: ComplianceViolation
+        expr: increase(anzen_compliance_violations_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Compliance violation detected"
+          description: "{{ $value }} compliance violations in the last hour"
+
+      # Data retention alerts
+      - alert: DataRetentionBacklog
+        expr: anzen_audit_logs_pending_deletion > 1000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data retention backlog"
+          description: "{{ $value }} audit logs are pending deletion beyond retention period"

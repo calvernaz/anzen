@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anzen - Safe AI</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'anzen-blue': '#3b82f6',
+                        'anzen-dark': '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .message-fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .typing-indicator {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        .entity-highlight {
+            background: linear-gradient(120deg, #fbbf24 0%, #f59e0b 100%);
+            padding: 2px 4px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+        }
+        .entity-redacted {
+            background: linear-gradient(120deg, #ef4444 0%, #dc2626 100%);
+            padding: 2px 4px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white border-b border-gray-200 px-4 py-3">
+            <div class="max-w-4xl mx-auto flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-anzen-black rounded-lg flex items-center justify-center">
+                        <span class="text-white font-bold text-sm">🛡️</span>
+                    </div>
+                    <h1 class="text-xl font-semibold text-gray-900">Anzen</h1>
+                    <span class="text-sm text-gray-500">Safe AI Chat</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button v-if="messages.length > 0" @click="clearChat" class="text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded">
+                        Clear Chat
+                    </button>
+                    <select v-model="selectedRoute" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-anzen-blue">
+                        <option value="public:chat">Public Chat</option>
+                        <option value="private:support">Private Support</option>
+                        <option value="internal:ops">Internal Ops</option>
+                    </select>
+                    <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                        <span class="text-gray-600 font-medium text-sm">U</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat Container -->
+        <main class="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+            <!-- Messages Area -->
+            <div class="flex-1 overflow-y-auto px-4 py-6 space-y-6" ref="messagesContainer">
+                <!-- Welcome Message -->
+                <div v-if="messages.length === 0" class="text-center py-12">
+                    <h2 class="text-2xl font-semibold text-gray-900 mb-2">Welcome to Anzen</h2>
+                    <p class="text-gray-600 mb-6">Your AI assistant with built-in privacy protection</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                        <button @click="loadExample('weather')" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors">
+                            <div class="font-medium text-gray-900">🌤️ Weather Query</div>
+                            <div class="text-sm text-gray-600">Ask about weather with personal info</div>
+                        </button>
+                        <button @click="loadExample('email')" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors">
+                            <div class="font-medium text-gray-900">📧 Email Example</div>
+                            <div class="text-sm text-gray-600">Test PII detection with email</div>
+                        </button>
+                        <button @click="loadExample('sensitive')" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors">
+                            <div class="font-medium text-gray-900">🔒 Sensitive Data</div>
+                            <div class="text-sm text-gray-600">Test with SSN and credit card</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chat Messages -->
+                <div v-for="message in messages" :key="message.id" class="message-fade-in">
+                    <!-- User Message -->
+                    <div v-if="message.type === 'user'" class="flex justify-end mb-4">
+                        <div class="max-w-3xl">
+                            <div class="bg-anzen-blue text-white rounded-2xl px-4 py-3">
+                                <p class="whitespace-pre-wrap" v-text="message.content"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Assistant Message -->
+                    <div v-else-if="message.type === 'assistant'" class="flex justify-start mb-4">
+                        <div class="max-w-3xl">
+                            <div class="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                                <p class="whitespace-pre-wrap text-gray-900" v-text="message.content"></p>
+                            </div>
+                            
+                            <!-- Safety Info -->
+                            <div v-if="message.safetyInfo" class="mt-2 p-3 bg-gray-50 rounded-lg text-sm">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <span class="text-green-600">🛡️</span>
+                                    <span class="font-medium text-gray-900">Safety Check</span>
+                                    <span :class="getSafetyBadgeClass(message.safetyInfo.decision)" class="px-2 py-1 rounded-full text-xs font-medium" v-text="message.safetyInfo.decision">
+                                    </span>
+                                </div>
+                                
+                                <div v-if="message.safetyInfo.entities && message.safetyInfo.entities.length > 0" class="space-y-1">
+                                    <div class="text-gray-600">Detected entities:</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span v-for="entity in message.safetyInfo.entities" :key="entity.type"
+                                              :class="getEntityClass(entity.type)" class="px-2 py-1 rounded text-xs">
+                                            <span v-text="entity.type"></span>: <span v-text="entity.text"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div v-if="message.safetyInfo.trace_id" class="text-xs text-gray-500 mt-2">
+                                    Trace ID: <span v-text="message.safetyInfo.trace_id"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Message -->
+                    <div v-else-if="message.type === 'system'" class="flex justify-center mb-4">
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 text-sm text-yellow-800" v-text="message.content">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Typing Indicator -->
+                <div v-if="isLoading" class="flex justify-start mb-4">
+                    <div class="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                        <div class="flex space-x-1">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full typing-indicator"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full typing-indicator" style="animation-delay: 0.2s"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full typing-indicator" style="animation-delay: 0.4s"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="border-t border-gray-200 bg-white px-4 py-4">
+                <div class="flex space-x-3">
+                    <div class="flex-1">
+                        <textarea 
+                            v-model="inputMessage" 
+                            @keydown.enter.prevent="handleEnter"
+                            placeholder="Message Anzen..."
+                            rows="1"
+                            class="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-anzen-blue focus:border-transparent"
+                            :disabled="isLoading"
+                        ></textarea>
+                    </div>
+                    <button 
+                        @click="sendMessage" 
+                        :disabled="!inputMessage.trim() || isLoading"
+                        class="bg-anzen-blue text-white rounded-lg px-6 py-3 font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <span v-if="!isLoading">Send</span>
+                        <span v-else>...</span>
+                    </button>
+                </div>
+                
+                <div class="text-xs text-gray-500 mt-2 text-center">
+                    Anzen protects your privacy by detecting and handling PII automatically
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/chat.js"></script>
+</body>
+</html>

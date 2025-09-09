@@ -1,0 +1,46 @@
+# Anzen Safety Gateway - NeMo Guardrails Configuration
+# PII detection and masking for AI agent inputs and outputs
+
+# No models section - pure action-based configuration for policy-only mode
+# This avoids LLM initialization and API key validation
+
+# Custom actions for PII detection and masking
+actions:
+  - name: "detect_pii_entities"
+    module: "anzen_gateway.presidio_actuator"
+    function: "detect_pii_entities"
+  - name: "anonymize_pii_text"
+    module: "anzen_gateway.presidio_actuator"
+    function: "anonymize_pii_text"
+  - name: "check_pii_risk_level"
+    module: "anzen_gateway.presidio_actuator"
+    function: "check_pii_risk_level"
+
+# Rails configuration for input/output masking
+rails:
+  input:
+    flows:
+      - check pii in user message
+  output:
+    flows:
+      - check pii in bot message
+
+# Policy configuration
+policies:
+  # Public routes - block high-risk PII
+  public:
+    block_entities: ["CREDIT_CARD", "US_SSN", "US_PASSPORT", "IBAN_CODE"]
+    redact_entities: ["EMAIL_ADDRESS", "PHONE_NUMBER"]
+    risk_threshold: 0.8
+    
+  # Private routes - redact PII but allow processing  
+  private:
+    block_entities: ["CREDIT_CARD", "US_SSN", "US_PASSPORT"]
+    redact_entities: ["EMAIL_ADDRESS", "PHONE_NUMBER", "PERSON", "IBAN_CODE"]
+    risk_threshold: 0.9
+    
+  # Internal routes - log only, minimal blocking
+  internal:
+    block_entities: ["CREDIT_CARD", "US_SSN"]
+    redact_entities: []
+    risk_threshold: 0.95

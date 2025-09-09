@@ -1,0 +1,30 @@
+# Anzen Safety Gateway - NeMo Guardrails Flows
+# Input and output flows for PII detection and masking
+
+# Input flow for PII detection and masking
+define flow check pii in user message
+  $entities = execute detect_pii_entities(text=$user_message)
+  $risk_level = execute check_pii_risk_level(text=$user_message)
+
+  # Store results in context for API access
+  set $entities = $entities
+  set $risk_level = $risk_level
+
+  # Execute anonymization if needed (policy-only, no bot responses)
+  if $risk_level == "medium" or $risk_level == "high"
+    $safe_text = execute anonymize_pii_text(text=$user_message)
+    set $safe_text = $safe_text
+
+# Output flow for PII detection and masking
+define flow check pii in bot message
+  $entities = execute detect_pii_entities(text=$bot_message)
+  $risk_level = execute check_pii_risk_level(text=$bot_message)
+
+  # Store results in context
+  set $entities = $entities
+  set $risk_level = $risk_level
+
+  # Always redact PII in output
+  if len($entities) > 0
+    $safe_text = execute anonymize_pii_text(text=$bot_message)
+    set $safe_text = $safe_text
